@@ -1,0 +1,52 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Achar a pasta do projeto
+        id: proj
+        run: |
+          FILE=$(find . -name settings.gradle -not -path "./.git/*" | head -n 1)
+          if [ -z "$FILE" ]; then
+            echo "settings.gradle NAO encontrado."
+            exit 1
+          fi
+          DIR=$(dirname "$FILE")
+          echo "dir=$DIR" >> "$GITHUB_OUTPUT"
+
+      - name: Instalar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Garantir o Android SDK 34
+        continue-on-error: true
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0"
+
+      - name: Instalar o Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Compilar o APK
+        working-directory: ${{ steps.proj.outputs.dir }}
+        run: gradle assembleDebug --no-daemon --stacktrace
+
+      - name: Guardar o APK para download
+        uses: actions/upload-artifact@v4
+        with:
+          name: PausaEstudo-apk
+          path: ${{ steps.proj.outputs.dir }}/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
